@@ -91,7 +91,5 @@ PG_demo_cleaner <- function(path, skip_num = 0) {
 }
 
 PG_tracker_merge <- function(PG_frame, tracker_frame) {
-  #This function will join the available tracking data into the Press-Ganey data.
-  
+  #This function will join the available tracking data into the Press-Ganey data. In order to do this, the function will look to see which duplicate is the closest match.
 }
-
