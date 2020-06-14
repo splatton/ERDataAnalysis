@@ -59,26 +59,6 @@ PG_cleaner <- function(path = "", first_skip = 0, second_skip = 0, top_until = 0
   return(joined_frame)
 }
 
-#This next function will take as inputs the cleaned PG frame and the cleaned tracker frame and output the cleaned PG frame with the number of holding patients at time of the patient's arrival.
-
-holds_by_arrival <- function(target_frame, trackdata, column_name = 'Timedate') {
-  working_frame <- filter(target_frame, column_name %in% trackdata$ARR)
-  holds <- vector()
-  temp_trackdata <- filter(trackdata, !(is.na(trackdata$Hold.StartTime)))
-  temp_trackdata <- filter(temp_trackdata, !(is.na(temp_trackdata$Hold.End.Date)))
-  for (i in 1:nrow(working_frame)) {
-    count <- 0
-    for (j in 1:nrow(temp_trackdata)) {
-      if((temp_trackdata[j, 'Hold.StartTime'] <= target_frame[i, column_name]) & (temp_trackdata[j, 'Hold.End.Date'] >= target_frame[i, column_name])) {
-        count <- count + 1
-      }
-    }
-    holds <- c(holds, count)
-  }
-  working_frame <- cbind(working_frame, holds)
-  return(working_frame)
-}
-
 #This function cleans the demographic part of the PG. Make sure to only start the csv file where the demographics begin!
 
 PG_demo_cleaner <- function(path, skip_num = 0) {
@@ -109,3 +89,9 @@ PG_demo_cleaner <- function(path, skip_num = 0) {
   final_cleaned_frame <- arrange(final_cleaned_frame, Timedate)
   return(final_cleaned_frame)
 }
+
+PG_tracker_merge <- function(PG_frame, tracker_frame) {
+  #This function will join the available tracking data into the Press-Ganey data.
+  
+}
+
