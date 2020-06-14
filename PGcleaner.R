@@ -91,5 +91,20 @@ PG_demo_cleaner <- function(path, skip_num = 0) {
 }
 
 PG_tracker_merge <- function(PG_frame, tracker_frame) {
-  #This function will join the available tracking data into the Press-Ganey data. In order to do this, the function will look to see which duplicate is the closest match.
+  #This function will join the available tracking data into the Press-Ganey data. In order to do this, the function will look to see which duplicate is the closest match. We will try just using age for now.
+  working_tracker <- filter(tracker_frame, ARR %in% PG_frame$Timedate)
+  double_vec <- duplicated(working_tracker$ARR) | duplicated(working_tracker$ARR, fromLast = TRUE)
+  rm_vector <- vector()
+  for (i in 1:nrow(working_tracker)) {
+    temp_PG_row <- filter(PG_frame, working_tracker$ARR[i] == Timedate)
+    if(double_vec[i] & working_tracker$Patient.Age[i] != temp_PG_row$Age[1]) {
+      rm_vector <- c(rm_vector, i)
+    } 
+  }
+  final_track_frame <- working_tracker[-rm_vector,]
+  PG_frame <- filter(PG_frame, Timedate %in% final_track_frame$ARR)
+  final_track_frame <- filter(final_track_frame, ARR %in% PG_frame$Timedate)
+  final_track_frame <- distinct(final_track_frame, ARR, .keep_all = TRUE)
+  joined_frame <- cbind(PG_frame, final_track_frame)
+  return(joined_frame)
 }
