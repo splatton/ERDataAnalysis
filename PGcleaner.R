@@ -32,7 +32,7 @@ PG_cleaner <- function(path = "", first_skip = 0, second_skip = 0, top_until = 0
   #Next we will need to make sure that there are no two timedates that are not the same.
   cleaned_top_frame <- distinct(top_frame, Timedate, .keep_all = TRUE)
   #Now we will add columns for our next several variables - Attending, Age, Sex, Race, Time Spent in the ED.
-  joined_frame <- mutate(cleaned_top_frame, Doc = NA, Age = NA, Sex = NA, Race = NA, LOS = NA)
+  joined_frame <- mutate(cleaned_top_frame, Doc = NA, Age = NA, Sex = NA, Race = NA, PGLOS = NA)
   #Now we bring in the demographics frame from the bottom part of the csv file.
   demo_frame <- PG_demo_cleaner(path, second_skip)
   #Finally, we will create loop functions that assign values to each of the new variables within the joined frame.
@@ -52,7 +52,7 @@ PG_cleaner <- function(path = "", first_skip = 0, second_skip = 0, top_until = 0
         joined_frame[i, 'Sex'] <- temp_time_frame[j, 'Value']
       }
       else if (temp_time_frame[j, 'Demographic'] == 'Time spent in the ED') {
-        joined_frame[i, 'LOS'] <- temp_time_frame[j, 'Value']
+        joined_frame[i, 'PGLOS'] <- temp_time_frame[j, 'Value']
       }
     }
   }
