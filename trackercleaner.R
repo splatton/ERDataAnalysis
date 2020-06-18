@@ -10,6 +10,7 @@ tracker_cleaner <- function(trackpath, skip_num = 0) {
   uncleaned_frame <- select(uncleaned_frame, -(GROUP.NAME:FACILITY.NAME), -X)
   uncleaned_frame <- select(uncleaned_frame, -c(Age.Grouping, FIRST.ER.LOCATION, PEDS, ADMIT.DATE))
   uncleaned_frame <- select(uncleaned_frame, -c(FIRST.READY.D.T:LAST.READY.D.T, Hold, Hold.End.Date))
+  uncleaned_frame <- select(uncleaned_frame, -Delay)
   uncleaned_frame[, 'ARR'] <- as.POSIXct(mdy_hm(uncleaned_frame[, 'ARR']))
   uncleaned_frame[, 'Disp.A'] <- as.POSIXct(mdy_hm(uncleaned_frame[, 'Disp.A']))
   uncleaned_frame[, 'ADMIT.ORDER.DATE'] <- as.POSIXct(mdy_hm(uncleaned_frame[, 'ADMIT.ORDER.DATE']))
@@ -37,6 +38,14 @@ tracker_cleaner <- function(trackpath, skip_num = 0) {
     }
   }
   uncleaned_frame[, 'Patient.Age'] <- as.integer(uncleaned_frame[, 'Patient.Age'])
+  #Now we will change all datetimes into POSIXct.
+  uncleaned_frame[, 'TRG'] <- as.POSIXct(mdy_hm(uncleaned_frame[, 'TRG']))
+  uncleaned_frame[, 'REG'] <- as.POSIXct(mdy_hm(uncleaned_frame[, 'REG']))
+  uncleaned_frame[, 'BED'] <- as.POSIXct(mdy_hm(uncleaned_frame[, 'BED']))
+  uncleaned_frame[, 'PHY'] <- as.POSIXct(mdy_hm(uncleaned_frame[, 'PHY']))
+  uncleaned_frame[, 'ORD'] <- as.POSIXct(mdy_hm(uncleaned_frame[, 'ORD']))
+  uncleaned_frame[, 'Disp.D'] <- as.POSIXct(mdy_hm(uncleaned_frame[, 'Disp.D']))
+  uncleaned_frame[, 'DIS'] <- as.POSIXct(mdy_hm(uncleaned_frame[, 'DIS']))
   cleaned_frame <- arrange(uncleaned_frame, ARR)
   return(cleaned_frame)
 }

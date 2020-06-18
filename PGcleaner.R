@@ -29,10 +29,10 @@ PG_cleaner <- function(path = "", first_skip = 0, second_skip = 0, top_until = 0
   top_frame <- select(top_frame, -IT.admit.date, -IT.Admit.time)
   top_frame <- mutate(top_frame, TopBox = (Very.Good.n > 0))
   top_frame <- arrange(top_frame, Timedate)
-  #Next we will need to make sure that there are no two timedates that are not the same.
+  #Next we will need to make sure that there are no two timedates that are the same.
   cleaned_top_frame <- distinct(top_frame, Timedate, .keep_all = TRUE)
   #Now we will add columns for our next several variables - Attending, Age, Sex, Race, Time Spent in the ED.
-  joined_frame <- mutate(cleaned_top_frame, Doc = NA, Age = NA, Sex = NA, Race = NA, PGLOS = NA)
+  joined_frame <- mutate(cleaned_top_frame, Doc = NA, Patient.Age = NA, Sex = NA, Race = NA, PGLOS = NA)
   #Now we bring in the demographics frame from the bottom part of the csv file.
   demo_frame <- PG_demo_cleaner(path, second_skip)
   #Finally, we will create loop functions that assign values to each of the new variables within the joined frame.
@@ -40,7 +40,7 @@ PG_cleaner <- function(path = "", first_skip = 0, second_skip = 0, top_until = 0
     temp_time_frame <- filter(demo_frame, Timedate == joined_frame[i, 'Timedate'])
     for (j in  1:nrow(temp_time_frame)) {
       if (temp_time_frame[j, 'Demographic'] == 'Age') {
-        joined_frame[i, 'Age'] <- temp_time_frame[j, 'Value']
+        joined_frame[i, 'Patient.Age'] <- temp_time_frame[j, 'Value']
       }
       else if (temp_time_frame[j, 'Demographic'] == 'IT ATTNNAME') {
         joined_frame[i, 'Doc'] <- temp_time_frame[j, 'Value']
@@ -56,7 +56,8 @@ PG_cleaner <- function(path = "", first_skip = 0, second_skip = 0, top_until = 0
       }
     }
   }
-  return(joined_frame)
+  #Now we will change the column names for easier joining. This should work with a full_join function now.
+  joined_frame <- rename(joined_frame, ARR = Timedate)
 }
 
 #This function cleans the demographic part of the PG. Make sure to only start the csv file where the demographics begin!
@@ -90,6 +91,8 @@ PG_demo_cleaner <- function(path, skip_num = 0) {
   return(final_cleaned_frame)
 }
 
+#The tracker merge function below should only be used if a full_join fails. This will need to have some of it's column names changed to process correctly. Timedate is now ARR and Age is now Patient.Age.
+
 PG_tracker_merge <- function(PG_frame, tracker_frame) {
   #This function will join the available tracking data into the Press-Ganey data. In order to do this, the function will look to see which duplicate is the closest match. We will try just using age for now.
   working_tracker <- filter(tracker_frame, ARR %in% PG_frame$Timedate)
@@ -107,4 +110,43 @@ PG_tracker_merge <- function(PG_frame, tracker_frame) {
   final_track_frame <- distinct(final_track_frame, ARR, .keep_all = TRUE)
   joined_frame <- cbind(PG_frame, final_track_frame)
   return(joined_frame)
+}
+
+#This function will re-purpose a cleaned PG data file for processing for a Data Studio upload.
+
+PG_data_studio_cleaner <- function(cleaned_PG) {
+  working_frame <- select(cleaned_PG, -Patient.Age, -Doc)
+  working_frame <- mutate(working_frame, Day = as_date(ARR))
+  working_frame <- select(working_frame, -ARR)
+  return(working_frame)
+}
+
+PG_data_studio_runningcount <- function(cleaned_PG) {
+  cleaned_PG <- mutate(cleaned_PG, EvenTBP = NA, OddTBP = NA, TBNum = 0)
+  even_count <- 0
+  odd_count <- 0
+  even_TB <- 0
+  odd_TB <- 0
+  for (i in 1:nrow(cleaned_PG)) {
+    if(cleaned_PG[i, 'Even.Day']) {
+      even_count <- even_count + 1
+      if(cleaned_PG[i, 'TopBox']) {
+        even_TB <- even_TB + 1
+        cleaned_PG[i, 'TBNum'] <- 1
+      }
+    }
+    else {
+      odd_count <- odd_count + 1
+      if(cleaned_PG[i, 'TopBox']) {
+        odd_TB <- odd_TB + 1
+        cleaned_PG[i, 'TBNum'] <- 1
+      }
+    }
+    cleaned_PG[i, 'EvenTBP'] <- even_TB/even_count
+    cleaned_PG[i, 'OddTBP'] <- odd_TB/odd_count
+  }
+  cleaned_PG %>%
+    group_by(Day) %>%
+    summarize(EvenTB = median(EvenTBP), OddTB = median(OddTBP))
+  return(cleaned_PG)
 }
