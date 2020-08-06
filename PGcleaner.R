@@ -1,6 +1,6 @@
 ##This file will attempt to clean a raw csv downloaded from the PG website. The goal will be to produce a product that shows the doctor's name, the date of the evaluation, and the time, as well. This will list each evaluation separately and will indicate via a T/F if that eval was considered 'Top Box'. This will also display any potential demographics, like the race, sex, and age. In order to input the correct format, the specifications are:
 
-PG_cleaner <- function(path = "", first_skip = 0, second_skip = 0, top_until = 0) {
+PG_cleaner <- function(path = "", first_skip = 0, second_skip = 0, top_until = 0, comment_path = 0, comm_skip = 0) {
   #Loads libraries.
   library(lubridate)
   library(dplyr)
@@ -19,11 +19,9 @@ PG_cleaner <- function(path = "", first_skip = 0, second_skip = 0, top_until = 0
   for (i in 1:nrow(top_frame)) {
     temp.char.list <- strsplit(top_frame$IT.admit.date[i], ' ')
     temp.char.vector <- temp.char.list[[1]]
-    day.vector <- c(day.vector, day(mdy(temp.char.vector[1])))
+    #day.vector <- c(day.vector, day(mdy(temp.char.vector[1])))
     top_frame$IT.admit.date[i] <- as_date(as.numeric(mdy(temp.char.vector[1])))
   }
-  day.vectorTF <- (day.vector%%2 == 0)
-  top_frame <- mutate(top_frame, "Even.Day" = day.vectorTF)
   top_frame[, 'IT.admit.date'] <- as_date(as.numeric(top_frame[, 'IT.admit.date']))
   top_frame <- mutate(top_frame, Timedate = as.POSIXct(IT.admit.date + IT.Admit.time))
   top_frame <- select(top_frame, -IT.admit.date, -IT.Admit.time)
@@ -56,8 +54,42 @@ PG_cleaner <- function(path = "", first_skip = 0, second_skip = 0, top_until = 0
       }
     }
   }
+  #Now we will standardize the races listed.
+  white <- c('White', 'WHITE', 'W')
+  black <- c('B', 'BLACK AFRICAN AMERICAN', 'Black or African American')
+  asian <- c('ASIAN', 'S')
+  pac_isl <- c('N', 'NATIVE HAWAIIAN OTH PACIFIC IS')
+  for (i in 1:nrow(joined_frame)) {
+    if(joined_frame[i, 'Race'] %in% white) {
+      joined_frame[i, 'Race'] <- 'W'
+    }
+    else if(joined_frame[i, 'Race'] %in% black) {
+      joined_frame[i, 'Race'] <- 'B'
+    }
+    else if(joined_frame[i, 'Race'] %in% asian) {
+      joined_frame[i, 'Race'] <- 'S'
+    }
+    else if(joined_frame[i, 'Race'] %in% pac_isl) {
+      joined_frame[i, 'Race'] <- 'N'
+    }
+    else {joined_frame[i, 'Race'] <- NA}
+  }
   #Now we will change the column names for easier joining. This should work with a full_join function now.
   joined_frame <- rename(joined_frame, ARR = Timedate)
+  #Now we add in the designation of odd and even days.
+  for (i in 1:nrow(joined_frame)) {
+    temp_day <- day(joined_frame[i, 'ARR'])
+    if (hour(joined_frame[i, 'ARR']) < 7) {
+      temp_day <- temp_day + 1
+    }
+    day.vector <- c(day.vector, temp_day)
+  }
+  day.vectorTF <- (day.vector%%2 == 0)
+  joined_frame <- mutate(joined_frame, "Even.Day" = day.vectorTF)
+  if(comment_path != 0) {
+    comment_frame <- PG_comment_cleaner(comment_path, comm_skip)
+  }
+  return(joined_frame)
 }
 
 #This function cleans the demographic part of the PG. Make sure to only start the csv file where the demographics begin!
@@ -87,8 +119,39 @@ PG_demo_cleaner <- function(path, skip_num = 0) {
   part_cleaned_frame[, 'IT.admit.date'] <- as_date(as.numeric(part_cleaned_frame[, 'IT.admit.date']))
   final_cleaned_frame <- mutate(part_cleaned_frame, Timedate = as.POSIXct(IT.admit.date + IT.Admit.time))
   final_cleaned_frame <- select(final_cleaned_frame, -IT.admit.date, -IT.Admit.time)
+  #final_cleaned_frame[,'Patient.Age'] <- as.integer(final_cleaned_frame[,'Patient.Age'])
   final_cleaned_frame <- arrange(final_cleaned_frame, Timedate)
   return(final_cleaned_frame)
+}
+
+#This net function will clean the PG comments table and put it in a format where it can be joined to the Press-Ganey table directly. 
+PG_comment_cleaner <- function(PG_comments, skip_num = 0) {
+  library(dplyr)
+  library(stringr)
+  library(lubridatedmy)
+  working_frame <- read.csv(PG_comments, skip = skip_num, stringsAsFactors = FALSE)
+  working_frame <- select(working_frame, -(Keyword:Rating))
+  working_frame <- select(working_frame, -Received.Date)
+  working_frame <- select(working_frame, -c(Breakout.Demo.1:Breakout.Demo.2))
+  working_frame <- summarize(group_by(.data = working_frame, Visit.Date, Sex, Age, Mode), Feedback = str_c(Comment, sep = "/", collapse = "/"))
+  return(working_frame)
+}
+
+#This function merges the comments with the larger PG frame.
+PG_comment_merge <- function(PG, PGcom) {
+  library(lubridate)
+  library(dplyr)
+  PG <- mutate(PG, Feedback = NA, Method = NA)
+  for (i in 1:nrow(PGcom)) {
+    for (j in 1:nrow(PG)) {
+      if((dmy(PGcom[i, 'Visit.Date']) == as_date(PG[j, 'ARR'])) & (PGcom[i, 'Sex'] == PG[j, 'Sex']) & (PGcom[i, 'Age'] == PG[j, 'Patient.Age'])) {
+        PG[j, 'Feedback'] <- PGcom[i, 'Feedback']
+        PG[j, 'Method'] <- PGcom[i, 'Mode']
+        break
+      }
+    }
+  }
+  return(PG)
 }
 
 #The tracker merge function below should only be used if a full_join fails. This will need to have some of it's column names changed to process correctly. Timedate is now ARR and Age is now Patient.Age.
