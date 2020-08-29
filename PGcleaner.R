@@ -29,6 +29,8 @@ PG_cleaner <- function(path = "", first_skip = 0, second_skip = 0, top_until = 0
   top_frame <- arrange(top_frame, Timedate)
   #Next we will need to make sure that there are no two timedates that are the same.
   cleaned_top_frame <- distinct(top_frame, Timedate, .keep_all = TRUE)
+  #Now we will assign a PG score value to each respondent.
+  cleaned_top_frame <- PG_score(cleaned_top_frame)
   #Now we will add columns for our next several variables - Attending, Age, Sex, Race, Time Spent in the ED.
   joined_frame <- mutate(cleaned_top_frame, Doc = NA, Patient.Age = NA, Sex = NA, Race = NA, PGLOS = NA)
   #Now we bring in the demographics frame from the bottom part of the csv file.
@@ -74,8 +76,9 @@ PG_cleaner <- function(path = "", first_skip = 0, second_skip = 0, top_until = 0
     }
     else {joined_frame[i, 'Race'] <- NA}
   }
-  #Now we will change the column names for easier joining. This should work with a full_join function now.
+  #Now we will change the column names for easier joining. This should work with a full_join function now. We will also change the Patient.Age column to be a number.
   joined_frame <- rename(joined_frame, ARR = Timedate)
+  joined_frame[,'Patient.Age'] <- as.numeric(joined_frame[,'Patient.Age'])
   #Now we add in the designation of odd and even days.
   for (i in 1:nrow(joined_frame)) {
     temp_day <- day(joined_frame[i, 'ARR'])
@@ -89,6 +92,7 @@ PG_cleaner <- function(path = "", first_skip = 0, second_skip = 0, top_until = 0
   if(comment_path != 0) {
     comment_frame <- PG_comment_cleaner(comment_path, comm_skip)
   }
+  joined_frame <- oneal_cleaner(joined_frame)
   return(joined_frame)
 }
 
@@ -128,13 +132,42 @@ PG_demo_cleaner <- function(path, skip_num = 0) {
 PG_comment_cleaner <- function(PG_comments, skip_num = 0) {
   library(dplyr)
   library(stringr)
-  library(lubridatedmy)
+  library(lubridate)
   working_frame <- read.csv(PG_comments, skip = skip_num, stringsAsFactors = FALSE)
   working_frame <- select(working_frame, -(Keyword:Rating))
   working_frame <- select(working_frame, -Received.Date)
   working_frame <- select(working_frame, -c(Breakout.Demo.1:Breakout.Demo.2))
   working_frame <- summarize(group_by(.data = working_frame, Visit.Date, Sex, Age, Mode), Feedback = str_c(Comment, sep = "/", collapse = "/"))
   return(working_frame)
+}
+
+#This short function takes a PG frame and adds a score to the response.
+
+PG_score <- function(semi_clean_PG) {
+  Score <- vector()
+  for (i in 1:nrow(semi_clean_PG)) {
+    if (is.na(semi_clean_PG[i, 'Very.Good.n'])) {
+      temp_score <- NA
+    }
+    else if (semi_clean_PG[i,'Very.Good.n'] == 1) {
+      temp_score <- 5
+    }
+    else if (semi_clean_PG[i,'Good.n'] == 1) {
+      temp_score <- 4
+    }
+    else if (semi_clean_PG[i,'Fair.n'] == 1) {
+      temp_score <- 3
+    }
+    else if (semi_clean_PG[i,'Poor.n'] == 1) {
+      temp_score <- 2
+    }
+    else if (semi_clean_PG[i,'Very.Poor.n'] == 1) {
+      temp_score <- 1
+    }
+    Score <- c(Score, temp_score)
+  }
+  semi_clean_PG <- cbind(semi_clean_PG, Score)
+  return(semi_clean_PG)
 }
 
 #This function merges the comments with the larger PG frame.
@@ -154,22 +187,22 @@ PG_comment_merge <- function(PG, PGcom) {
   return(PG)
 }
 
-#The tracker merge function below should only be used if a full_join fails. This will need to have some of it's column names changed to process correctly. Timedate is now ARR and Age is now Patient.Age.
+#The tracker merge function below should only be used if a full_join fails. This will need to have some of its column names changed to process correctly. Timedate is now ARR and Age is now Patient.Age.
 
 PG_tracker_merge <- function(PG_frame, tracker_frame) {
   #This function will join the available tracking data into the Press-Ganey data. In order to do this, the function will look to see which duplicate is the closest match. We will try just using age for now.
-  working_tracker <- filter(tracker_frame, ARR %in% PG_frame$Timedate)
+  working_tracker <- filter(tracker_frame, ARR %in% PG_frame$ARR)
   double_vec <- duplicated(working_tracker$ARR) | duplicated(working_tracker$ARR, fromLast = TRUE)
   rm_vector <- vector()
   for (i in 1:nrow(working_tracker)) {
-    temp_PG_row <- filter(PG_frame, working_tracker$ARR[i] == Timedate)
-    if(double_vec[i] & working_tracker$Patient.Age[i] != temp_PG_row$Age[1]) {
+    temp_PG_row <- filter(PG_frame, working_tracker$ARR[i] == ARR)
+    if(double_vec[i] & working_tracker$Patient.Age[i] != temp_PG_row$Patient.Age[1]) {
       rm_vector <- c(rm_vector, i)
     } 
   }
   final_track_frame <- working_tracker[-rm_vector,]
-  PG_frame <- filter(PG_frame, Timedate %in% final_track_frame$ARR)
-  final_track_frame <- filter(final_track_frame, ARR %in% PG_frame$Timedate)
+  PG_frame <- filter(PG_frame, ARR %in% final_track_frame$ARR)
+  final_track_frame <- filter(final_track_frame, ARR %in% PG_frame$ARR)
   final_track_frame <- distinct(final_track_frame, ARR, .keep_all = TRUE)
   joined_frame <- cbind(PG_frame, final_track_frame)
   return(joined_frame)
@@ -212,4 +245,19 @@ PG_data_studio_runningcount <- function(cleaned_PG) {
     group_by(Day) %>%
     summarize(EvenTB = median(EvenTBP), OddTB = median(OddTBP))
   return(cleaned_PG)
+}
+
+#This function cleans Mike O'Neal's name. He apparently needs his own function.
+
+oneal_cleaner <- function(pg_frame) {
+  for (i in 1:nrow(pg_frame)) {
+    temp_name <- pg_frame[i, 'Doc']
+    if (is.na(temp_name)) {
+      next
+    }
+    else if (temp_name == "ONEAL JOHN M  MD") {
+      pg_frame[i, 'Doc'] <- "O NEAL JOHN M  MD"
+    }
+  }
+  return(pg_frame)
 }

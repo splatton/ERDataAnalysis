@@ -258,7 +258,7 @@ phys_pt_load <- function(cleaned_dispoeddata) {
   return(changed_trackdata)
 }
 
-#This function is made to work on the above phys_pt_load function and requires the frame to be filtered for patients that were actually in the ED and under the physician's name at the time of patient arrival. It will calculate a weighted total work level for the dataframe inputted. The inputted dataframe will also have a TF column that indicates T if the patient is undispo'd.
+#This function is made to work on the above phys_pt_load function and requires the frame to be filtered for patients that were actually in the ED and under the physician's name at the time of patient arrival. It will calculate a weighted total work level for the dataframe inputted. The inputted dataframe will also have a TF column that indicates T if the patient is undispo'd. This function is called within the function above and does not need to be called separately.
 
 phys_mental_work <- function(phys_frame) {
   if (nrow(phys_frame) < 1) {
@@ -285,31 +285,29 @@ phys_mental_work <- function(phys_frame) {
 tracker_process_complete <- function(cleaned_trackdata, cleaned_nursedata, cleaned_dispodata, cleaned_PGdata) {
   working_data <- holds_by_arrival(cleaned_trackdata)
   working_data <- total_census_arrival(working_data)
-  working_data <- mutate(working_data, PercentHolds = NumHolds/NumPts)
+  working_data <- mutate(working_data, PercentHolds = ifelse(NumPts > 0, NumHolds/NumPts, NA))
   working_data <- arrival_itensity(working_data)
   working_data <- EMSarrival_itensity(working_data)
   working_data <- ICUholds_by_arrival(working_data)
   working_data <- LWBS_density(working_data)
   working_data <- AMA_density(working_data)
+  working_data <- next_hour_dispos(working_data)
+  working_data <- time_of_day(working_data)
+  working_data <- ED_patient_density(working_data)
   #Now we add in columns for nursing data after processing all of the tracker data.
   working_data <- full_join(working_data, cleaned_nursedata, by = c('ARR', 'Pat.Acct..'))
   working_data <- active_nurses(working_data)
   working_data <- mutate(working_data, GreetToPainmed = PAINMED.GVN.D.T - PHY)
   working_data <- mutate(working_data, GreetToLab = LAB.COLL.D.T - PHY)
-  working_data <- mutate(working_data, HoldsPerNurse = NumHolds/ActiveRN)
-  working_data <- mutate(working_data, PtsPerNurse = NumPts/ActiveRN)
+  working_data <- mutate(working_data, HoldsPerNurse = ifelse(ActiveRN > 0, NumHolds/ActiveRN, NA))
+  working_data <- mutate(working_data, PtsPerNurse = ifelse(ActiveRN > 0, NumPts/ActiveRN, NA))
   #Next we add in columns from the dispo tracker.
   working_data <- full_join(working_data, cleaned_dispodata, by = c('ARR', 'Pat.Acct..'))
   working_data <- phys_pt_load(working_data)
-  working_data <- mutate(working_data, UndispToDispRate = TotalUndisp/NextHrDisp)
+  working_data <- mutate(working_data, UndispToDispRate = ifelse(NextHrDisp > 0, TotalUndisp/NextHrDisp, NA))
+  working_data <- MLprocess(working_data)
   #Now we add in columns for PG data after processing all above data.
   working_data <- full_join(working_data, cleaned_PGdata, by = c('ARR', 'Patient.Age'))
   return(working_data)
 }
 
-#This next function will scale the appropriate columns for better analysis. This requires a complete union of ED tracker, nursing tracker, and dispo tracker.
-
-scale_tracker <- function(complete_tracker) {
-  working_tracker <- mutate(working_tracker, Good.Day = LWBS_Int+AMA_Int+PtsPerNurse+NumHolds+ICUHolds+NumPts+EMS_Int+PhysLoad+Arr_Int)
-  
-}

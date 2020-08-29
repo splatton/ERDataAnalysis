@@ -32,5 +32,18 @@ nursing_cleaner <- function(trackpath, skip_num = 0) {
     mutate(UA.ORD.COL = UA.COLL.D.T - UA.ORD.D.T)
   uncleaned_frame <- rename(uncleaned_frame, ARR = ARRIVAL.D.T, Pat.Acct.. = Pat.Acc.)
   cleaned_frame <- arrange(uncleaned_frame, ARR)
-  return(uncleaned_frame)
+  #Now we will call an external function that removes the ecoding from the nurses' names to allow us to sort them appropriately.
+  cleaned_frame <- nurse_name_cleaner(cleaned_frame)
+  return(cleaned_frame)
+}
+
+#This function will appropriately clean the nurses' names to allow us to sort them appropriately.
+
+nurse_name_cleaner <- function(nurse_data) {
+  library(stringr)
+  for (i in 1:nrow(nurse_data)) {
+    nurse_data[i, 'NURSE'] <- str_split(nurse_data[i, 'NURSE'], "[:space:]", n = 2)[[1]][1]
+    nurse_data[i, 'NURSE'] <- str_split(nurse_data[i, 'NURSE'], "\\(", n = 2)[[1]][1]
+  }
+  return(nurse_data)
 }
