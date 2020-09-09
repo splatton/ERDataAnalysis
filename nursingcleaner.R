@@ -47,3 +47,17 @@ nurse_name_cleaner <- function(nurse_data) {
   }
   return(nurse_data)
 }
+
+#This function will take a data frame and change the column labeled 'NURSE' so that it only contains nurses with greater than X total patient encounters recorded. It replaces these nurses with small numbers of encounters with the string 'Unkown'.
+
+nurse_name_freq_cleaner <- function(nurse_data, min_num) {
+  library(dplyr)
+  nurse_summary <- summarize(group_by(nurse_data, NURSE), n = n())
+  nurse_summary <- mutate(nurse_summary, MaxNURSE = ifelse(n >= min_num, NURSE, 'Nope'))
+  for (i in 1:nrow(nurse_data)) {
+    if(!(nurse_data[i, 'NURSE'] %in% nurse_summary$MaxNURSE)) {
+      nurse_data[i, 'NURSE'] <- 'UNKNOWN'
+    }
+  }
+  return(nurse_data)
+}

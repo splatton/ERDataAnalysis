@@ -7,7 +7,7 @@ tracker_cleaner <- function(trackpath, skip_num = 0) {
   library(stringr)
   #Gets the csv and skips the extra data at the top.
   uncleaned_frame <- read.csv(trackpath, skip = skip_num, stringsAsFactors = FALSE)
-  uncleaned_frame <- select(uncleaned_frame, -(GROUP.NAME:FACILITY.NAME), -X)
+  uncleaned_frame <- select(uncleaned_frame, -(GROUP.NAME:FACILITY.COID), -X)
   uncleaned_frame <- select(uncleaned_frame, -c(Age.Grouping, FIRST.ER.LOCATION, PEDS, ADMIT.DATE))
   uncleaned_frame <- select(uncleaned_frame, -c(FIRST.READY.D.T:LAST.READY.D.T, Hold, Hold.End.Date))
   uncleaned_frame <- select(uncleaned_frame, -Delay)

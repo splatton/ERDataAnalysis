@@ -308,6 +308,13 @@ tracker_process_complete <- function(cleaned_trackdata, cleaned_nursedata, clean
   working_data <- MLprocess(working_data)
   #Now we add in columns for PG data after processing all above data.
   working_data <- full_join(working_data, cleaned_PGdata, by = c('ARR', 'Patient.Age'))
+  #Now we add in a column for the day of the week.
+  working_data <- mutate(working_data, Day.Of.Week = wday(ARR))
   return(working_data)
 }
 
+#This next function will focus on processing Excel files that contain multiple sheets of data from across the division. Any sheet with the sheet name 'DESCRIPTIONS' should be discarded. The sheets will be kept in a list format for now and this will be what is returned.
+
+process_division_list <- function(division_directory) {
+  
+}
